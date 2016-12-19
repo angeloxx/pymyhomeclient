@@ -1,18 +1,20 @@
 import asyncore, socket, hmac, hashlib, random, string
 
+# Simple MyHome Client that implements authentication
 class MHClient():
     def __init__(self,ipaddress):
         self.ipaddress = ipaddress
         self.command = MHConnection(self.ipaddress,20000,"COMMAND","12345")
         self.monitor = MHConnection(self.ipaddress,20000,"MONITOR","12345")        
 
+    def monitorHander(self,_callback):
+        self.monitor.setHandler(_callback)
+
     def sendCommand(self,command):
         self.command.write(command)
 
 
 class MHConnection(asyncore.dispatcher):
-    def __init2__(self):
-        pass
     def __init__(self, host, port, type, password):
         self.host = host
         self.port = port
@@ -22,10 +24,14 @@ class MHConnection(asyncore.dispatcher):
         self.buffer = ""
         self.commandqueue = []
         self.expectedAnswer = ""
+        self.callback = None
 
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect( (self.host, self.port))
+
+    def setHandler(self,_callback):
+        self.callback = _callback
 
     def handle_connect(self):
         print "State[%s]: Connected" % (self.type)
@@ -58,7 +64,10 @@ class MHConnection(asyncore.dispatcher):
         elif self.state == 11 and read == self.expectedAnswer:
             self.state = 100
             self.buffer = '*#*1##' + ''.join(self.commandqueue)
-        
+        elif self.state == 100:
+            if self.callback != None:
+                self.callback(read)
+
     def calcHMAC(self,ra,password):
         if len(ra) == 80:
             # SHA1 Algo
